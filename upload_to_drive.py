@@ -57,7 +57,8 @@ media = MediaFileUpload(
 file = drive_service.files().create(
     body=file_metadata,
     media_body=media,
-    fields='id'
+    fields='id',
+    supportsAllDrives=True
 ).execute()
 
 print("Upload successful. File ID:", file.get('id'))
