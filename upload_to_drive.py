@@ -1,13 +1,12 @@
 import snowflake.connector
 import pandas as pd
 import datetime
-from google.oauth2 import service_account
+import os
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import os
-import json
 
-# 1. Connect to Snowflake
+# ---------------- Snowflake ----------------
 
 conn = snowflake.connector.connect(
     user=os.environ['SNOWFLAKE_USER'],
@@ -18,29 +17,23 @@ conn = snowflake.connector.connect(
     schema='EXPORT_SCHEMA'
 )
 
-query = "SELECT * FROM sales_data"
-df = pd.read_sql(query, conn)
+df = pd.read_sql("SELECT * FROM sales_data", conn)
 conn.close()
-
-# 2. Create Excel File
 
 file_name = f"sales_export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 df.to_excel(file_name, index=False)
 
-# 3. Google Drive Authentication
+# ---------------- Google OAuth ----------------
 
-SCOPES = ['https://www.googleapis.com/auth/drive']
-
-service_account_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-
-credentials = service_account.Credentials.from_service_account_info(
-    service_account_info,
-    scopes=SCOPES
+creds = Credentials(
+    None,
+    refresh_token=os.environ['GOOGLE_REFRESH_TOKEN'],
+    token_uri="https://oauth2.googleapis.com/token",
+    client_id=os.environ['GOOGLE_CLIENT_ID'],
+    client_secret=os.environ['GOOGLE_CLIENT_SECRET']
 )
 
-drive_service = build('drive', 'v3', credentials=credentials)
-
-# 4. Upload File to Drive Folder
+service = build('drive', 'v3', credentials=creds)
 
 folder_id = os.environ['DRIVE_FOLDER_ID']
 
@@ -54,11 +47,10 @@ media = MediaFileUpload(
     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 )
 
-file = drive_service.files().create(
+file = service.files().create(
     body=file_metadata,
     media_body=media,
-    fields='id',
-    supportsAllDrives=True
+    fields='id'
 ).execute()
 
 print("Upload successful. File ID:", file.get('id'))
